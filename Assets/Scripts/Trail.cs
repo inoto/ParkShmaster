@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using NaughtyAttributes;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -7,7 +9,7 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(MeshRenderer))]
 public class Trail : MonoBehaviour
 {
-    const int MaxSegments = 500;
+    const int MaxSegments = 300;
 
     [SerializeField] bool updateInEditor = true;
     [SerializeField] float maxSegmentLength = 1f;
@@ -19,17 +21,21 @@ public class Trail : MonoBehaviour
     [SerializeField] MeshFilter meshF;
     [SerializeField] ParticleSystem particles;
 
-    [SerializeField] List<Vector3> points = new List<Vector3>(MaxSegments);
+    List<Vector3> points = new List<Vector3>(MaxSegments);
+
     Car car;
     Transform plane;
+    GameObject linkedParking;
     Vector3 pressedPoint = Vector3.zero;
     bool parkingFound = false;
     bool splineEnded = false;
+    public bool IsSplineEnded => splineEnded;
 
-    public void Init(Car car, Transform plane)
+    public void Init(Car car, Transform plane, GameObject linkedParking)
     {
         this.car = car;
         this.plane = plane;
+        this.linkedParking = linkedParking;
         particles.Stop();
     }
 
@@ -45,9 +51,6 @@ public class Trail : MonoBehaviour
 
     public void Begin()
     {
-        if (splineEnded)
-            return;
-
         Back();
 
         pressedPoint = car.transform.position.Y(plane.position.y);
@@ -55,9 +58,16 @@ public class Trail : MonoBehaviour
         particles.Play();
     }
 
+    public void Continue()
+    {
+        pressedPoint = car.transform.position.Y(plane.position.y);
+        points.Add(pressedPoint);
+        particles.Play();
+    }
+
     public void Modify(Vector3 hitPoint)
     {
-        if (parkingFound || points.Count > MaxSegments || splineEnded)
+        if (parkingFound || points.Count > MaxSegments)
             return;
 
         particles.transform.position = hitPoint;
@@ -67,6 +77,7 @@ public class Trail : MonoBehaviour
             if (Vector3.Distance(pressedPoint, hitPoint) >= maxSegmentLength)
             {
                 points.Add(hitPoint);
+                UpdateTrail();
             }
         }
         else
@@ -74,29 +85,25 @@ public class Trail : MonoBehaviour
             if (Vector3.Distance(points[points.Count - 1], hitPoint) >= maxSegmentLength)
             {
                 points.Add(hitPoint);
+                UpdateTrail();
             }
         }
-
-        UpdateTrail();
     }
 
-    public void ParkingReached(Vector3 hitPoint, Vector3 parkingPosition)
+    public void ParkingReached(Vector3 hitPoint, GameObject parking)
     {
-        if (parkingFound)
+        if (parkingFound || linkedParking.GetInstanceID() != parking.GetInstanceID())
             return;
 
         particles.Stop();
         parkingFound = true;
         points.Add(hitPoint);
-        points.Add(parkingPosition.Y(plane.position.y));
+        points.Add(parking.transform.position.Y(plane.position.y));
         UpdateTrail();
     }
 
     public void End(Vector3 hitPoint)
     {
-        if (splineEnded)
-            return;
-
         splineEnded = true;
 
         particles.Stop();
@@ -109,11 +116,13 @@ public class Trail : MonoBehaviour
 
     public void End()
     {
-        if (splineEnded)
-            return;
-
         splineEnded = true;
 
+        Move();
+    }
+
+    public void Move()
+    {
         particles.Stop();
         car.MoveAlongPoints(points, parkingFound);
     }
@@ -125,13 +134,14 @@ public class Trail : MonoBehaviour
         {
             array[i] = points[i].Y(plane.position.y);
         }
-        meshF.sharedMesh = CreatePathMesh(array);
+
+        meshF.sharedMesh = UpdateMesh(array);
 
         int textureRepeat = Mathf.RoundToInt(tiling * array.Length * spacing * .05f);
         meshR.sharedMaterial.mainTextureScale = new Vector2(1, textureRepeat);
     }
 
-    Mesh CreatePathMesh(Vector3[] points)
+    Mesh UpdateMesh(Vector3[] points)
     {
         Vector3[] verts = new Vector3[(points.Length * 2) + ((roundCornersCount + 1) * 2)];
         Vector2[] uvs = new Vector2[verts.Length];
@@ -145,7 +155,7 @@ public class Trail : MonoBehaviour
 
         for (int i = 0; i < roundCornersCount; i++)
         {
-            float t = i / (float)(roundCornersCount - 1);
+            float t = i / (float) (roundCornersCount - 1);
             Vector3 direction = Vector3.zero;
             if (points.Length > 1)
                 direction = (points[1] - points[0]).normalized;
@@ -154,7 +164,7 @@ public class Trail : MonoBehaviour
             Vector3 point = new Vector3(Mathf.Cos(angRad), 0, -Mathf.Sin(angRad));
             verts[vertIndex] = points[0] + point * width * .5f;
 
-            // float completionPercent = i / (float)(points.Length - 1);
+                // float completionPercent = i / (float)(points.Length - 1);
             uvs[vertIndex] = new Vector2(0, i);
             // uvs[vertIndex + 1] = new Vector2(1, completionPercent);
 
@@ -176,16 +186,19 @@ public class Trail : MonoBehaviour
             {
                 direction += points[(i + 1) % points.Length] - points[i];
             }
+
             if (i > 0)
             {
                 direction += points[i] - points[(i - 1 + points.Length) % points.Length];
             }
+
             direction.Normalize();
 
             Vector3 side = Vector3.Cross(direction, Vector3.up).normalized;
 
             verts[vertIndex] = points[i] + side * width * .5f;
             verts[vertIndex + 1] = points[i] - side * width * .5f;
+            
 
             float completionPercent = i / (float)(points.Length - 1);
             //                float v = 1 - Mathf.Abs(2 * completionPercent - 1);

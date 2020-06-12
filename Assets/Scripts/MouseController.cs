@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
@@ -12,10 +13,18 @@ public class MouseController : MonoBehaviour
     Ray ray;
     RaycastHit hit;
     Car activeCar = null;
+    Car[] cars;
+    LinkedList<Car> actions = new LinkedList<Car>();
+    Stack<Car> backedCars = new Stack<Car>();
 
     void Awake()
     {
         ms = Mouse.current;
+    }
+
+    void Start()
+    {
+        cars = FindObjectsOfType<Car>();
     }
 
     void Update()
@@ -29,22 +38,16 @@ public class MouseController : MonoBehaviour
             {
                 if (hit.collider.CompareTag("Car"))
                 {
-                    if (activeCar != null
-                        && activeCar.gameObject.GetInstanceID() == hit.transform.gameObject.GetInstanceID())
-                    {
-                        activeCar.Back();
-                        activeCar = null;
-                        return;
-                    }
-
-                    activeCar = hit.transform.GetComponent<Car>();
-                    activeCar.Trail.Begin();
+                    var car = hit.transform.GetComponent<Car>();
+                    car.Interacted(hit.point);
+                    BackOtherCars(car);
+                    activeCar = car;
                     return;
                 }
                 if (hit.collider.CompareTag("StartMarker"))
                 {
-                    activeCar.Back();
-                    activeCar = null;
+                    var startMarker = hit.transform.GetComponent<StartMarker>();
+                    startMarker.Car.Back();
                     return;
                 }
             }
@@ -60,6 +63,8 @@ public class MouseController : MonoBehaviour
             {
                 activeCar.Trail.End();
             }
+            ContinueOtherCars();
+            activeCar = null;
         }
 
         if (ms.leftButton.isPressed && activeCar != null)
@@ -69,7 +74,7 @@ public class MouseController : MonoBehaviour
             {
                 if (hit.collider.CompareTag("Parking"))
                 {
-                    activeCar.Trail.ParkingReached(hit.point, hit.transform.position);
+                    activeCar.Trail.ParkingReached(hit.point, hit.collider.gameObject);
                     return;
                 }
 
@@ -82,12 +87,46 @@ public class MouseController : MonoBehaviour
         }
     }
 
+    void BackOtherCars(Car car)
+    {
+        foreach (var otherCar in cars)
+        {
+            if (car == otherCar)
+                continue;
+            if (!otherCar.IsOnStartPosition)
+            {
+                otherCar.Back();
+                backedCars.Push(otherCar);
+            }
+        }
+    }
+
+    void ContinueOtherCars()
+    {
+        while (backedCars.Count > 0)
+        {
+            var otherCar = backedCars.Pop();
+            if (otherCar.IsOnStartPosition && otherCar.Trail.IsSplineEnded)
+            {
+                otherCar.Trail.Move();
+            }
+        }
+    }
+
     public void UndoButtonPressed()
     {
-        if (activeCar != null)
+        foreach (var car in cars)
         {
-            activeCar.Back();
-            activeCar = null;
+            if (!car.IsOnStartPosition)
+            {
+                car.Back();
+            }
+            else if (car.Trail.IsSplineEnded)
+            {
+                car.Trail.Back();
+                break;
+            }
         }
+        activeCar = null;
     }
 }

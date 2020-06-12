@@ -2,6 +2,7 @@
   "dependencies": {
     "com.unity.ide.rider": "1.1.4",
     "com.unity.inputsystem": "1.0.0",
+    "com.unity.recorder": "2.2.0-preview.4",
     "com.unity.test-framework": "1.1.11",
     "com.unity.textmeshpro": "2.0.1",
     "com.unity.timeline": "1.2.13",

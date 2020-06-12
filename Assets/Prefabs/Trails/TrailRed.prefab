@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 2223599265271764691}
   - component: {fileID: 2223599265271764692}
   m_Layer: 0
-  m_Name: Trail
+  m_Name: TrailRed
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -55,6 +55,8 @@ MonoBehaviour:
   meshR: {fileID: 2223599265271764691}
   meshF: {fileID: 2223599265271764692}
   particles: {fileID: 1569261928964984948}
+  linkedParking: {fileID: 2686895558003849704, guid: 1c2dc8a882623e84d9b069b98de30eef,
+    type: 3}
   points: []
 --- !u!23 &2223599265271764691
 MeshRenderer:
